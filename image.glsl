@@ -1,28 +1,72 @@
-#version 330
-
-#include <common.glsl>
-
-uniform vec2 iResolution;
-uniform float iTime;
-uniform float iTimeDelta;
-uniform int iFrame;
-uniform vec4 iMouse;
-uniform sampler2D iChannel0;
-uniform sampler2D iChannel1;
-uniform sampler2D iChannel2;
-uniform sampler2D iChannel3;
-out vec4 shadertoy_outcolor;
-
 #define SURFACE_DISTANCE_EPSILON 0.01
 #define MAX_STEPS 100
 #define MAX_DISTANCE 100.
 
+struct Sphere {
+  vec3 position;
+  float radius;
+  float distance;
+};
+
+// 2 spheres + cylinder between
+struct Capsule {
+  vec3 a;
+  vec3 b;
+  float radius;
+  float distance;
+};
+
+struct Torus {
+  vec3 position;
+  float innerRadius;
+  float radius;
+  float distance;
+};
+
+
+Sphere signedDistanceSphere(vec3 point, vec3 position, float radius) {
+  float distance = length(point - position) - radius;
+  return Sphere(position, radius, distance);
+}
+
+Capsule signedDistanceCapsule(vec3 point, vec3 a, vec3 b, float radius) {
+  vec3 ab = b - a;
+  vec3 ap = point - a;
+
+  float t = dot(ab, ap) / dot(ab, ab);
+  t = clamp(t, 0., 1.);
+  vec3 c = a + t * ab;
+
+  float distance = length(point - c) - radius;
+
+  return Capsule(
+    a, b, radius,
+    distance
+  );
+}
+
+Torus signedDistanceTorus(vec3 point, vec3 position, float radius, float innerRadius) {
+  vec3 relativePosition = point - position;
+  float x = length(relativePosition.xz) - radius;
+  float distance = length(vec2(x, relativePosition.y)) - innerRadius;
+  return Torus(
+    position,
+    innerRadius,
+    radius,
+    distance
+  );
+}
+
 float getDistanceToScene(vec3 point) {
-    vec4 sphere = vec4(0, 1, 6, 1);
-    float distanceToSphere = length(point - sphere.xyz) - sphere.w;
+    Sphere sphere = signedDistanceSphere(point, vec3(0, 1, 6), 1.);
+
+    Capsule capsule = signedDistanceCapsule(point, vec3(0, 1, 6), vec3(1, 2, 6), .2);
+
+    Torus torus = signedDistanceTorus(point, vec3(0, 0.2, 5), 1.5, .1);
 
     float distanceToPlane = point.y;
-    float distance = min(distanceToSphere, distanceToPlane);
+    float distance = min(capsule.distance, distanceToPlane);
+    distance = min(distance, torus.distance);
 
     return distance;
 }
@@ -59,7 +103,7 @@ float rayMarch(vec3 rayOrigin, vec3 rayDistance) {
 
 float getLight(vec3 point) {
   vec3 lightPosition = vec3(0, 5, 6);
-  lightPosition.xz += vec2(sin(iTime), cos(iTime));
+  lightPosition.xz += vec2(sin(iTime), cos(iTime) * 2.);
 
   vec3 light = normalize(lightPosition - point);
 
@@ -95,8 +139,3 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(col, 1.0);
 }
 
-
-void main()
-{
-	mainImage(shadertoy_outcolor, gl_FragCoord.xy);
-}
