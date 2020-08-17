@@ -16,6 +16,13 @@ struct Capsule {
   float distance;
 };
 
+struct Cylinder {
+  vec3 a;
+  vec3 b;
+  float radius;
+  float distance;
+};
+
 struct Torus {
   vec3 position;
   float innerRadius;
@@ -23,6 +30,11 @@ struct Torus {
   float distance;
 };
 
+struct Box {
+  vec3 position;
+  vec3 size;
+  float distance;
+};
 
 Sphere signedDistanceSphere(vec3 point, vec3 position, float radius) {
   float distance = length(point - position) - radius;
@@ -45,6 +57,27 @@ Capsule signedDistanceCapsule(vec3 point, vec3 a, vec3 b, float radius) {
   );
 }
 
+Cylinder signedDistanceCylinder(vec3 point, vec3 a, vec3 b, float radius) {
+  vec3 ab = b - a;
+  vec3 ap = point - a;
+
+  float t = dot(ab, ap) / dot(ab, ab);
+  vec3 c = a + t * ab;
+
+  float distance = length(point - c) - radius;
+
+  float y = (abs(t - .5) - .5) * length(ab);
+
+  float exteriorDistance = length(max(vec2(distance, y), 0.));
+  float interiorDistance = min(max(distance, y), 0.);
+
+  float cappedDistance = interiorDistance + exteriorDistance;
+  return Cylinder(
+    a, b, radius,
+    cappedDistance
+  );
+}
+
 Torus signedDistanceTorus(vec3 point, vec3 position, float radius, float innerRadius) {
   vec3 relativePosition = point - position;
   float x = length(relativePosition.xz) - radius;
@@ -57,16 +90,31 @@ Torus signedDistanceTorus(vec3 point, vec3 position, float radius, float innerRa
   );
 }
 
+Box signedDistanceBox(vec3 point, vec3 position, vec3 size) {
+  float distance = length(max(abs(point - position) - size, 0.));
+  return Box(
+    position,
+    size,
+    distance
+  );
+}
+
 float getDistanceToScene(vec3 point) {
     Sphere sphere = signedDistanceSphere(point, vec3(0, 1, 6), 1.);
 
-    Capsule capsule = signedDistanceCapsule(point, vec3(0, 1, 6), vec3(1, 2, 6), .2);
+    Capsule capsule = signedDistanceCapsule(point, vec3(0, .7, 6), vec3(1, 2, 6), .2);
+
+    Cylinder cylinder = signedDistanceCylinder(point, vec3(1.5, .1, 4), vec3(.1, 1.2, 4), .4);
 
     Torus torus = signedDistanceTorus(point, vec3(0, 0.2, 5), 1.5, .1);
+
+    Box box = signedDistanceBox(point, vec3(-1, .15, 6), vec3(.5, .3, 1.9));
 
     float distanceToPlane = point.y;
     float distance = min(capsule.distance, distanceToPlane);
     distance = min(distance, torus.distance);
+    distance = min(distance, box.distance);
+    distance = min(distance, cylinder.distance);
 
     return distance;
 }
@@ -124,9 +172,10 @@ float getLight(vec3 point) {
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // Normalized pixel coordinates (from 0 to 1)
     vec2 uv = (fragCoord - .5 * iResolution.xy) / iResolution.y;
-    
-    vec3 rayOrigin = vec3(0, 1, 0);
-    vec3 rayDistance = normalize(vec3(uv.x, uv.y, 1));
+
+    // camera
+    vec3 rayOrigin = vec3(0, 2, 0);
+    vec3 rayDistance = normalize(vec3(uv.x, uv.y - .2, 1));
 
     float distance = rayMarch(rayOrigin, rayDistance);
 
