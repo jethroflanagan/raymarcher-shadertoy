@@ -53,6 +53,16 @@ vec3 R(vec2 uv, vec3 p, vec3 l, float z) {
     return d;
 }
 
+vec3 opRep( in vec3 p, float c )
+{
+    return mod(p + 0.5 * c, c) - 0.5 * c;
+}
+
+vec3 opRep( in vec3 p, vec3 c )
+{
+    return mod(p + 0.5 * c, c) - 0.5 * c;
+}
+
 // polynomial, taken from Dreams (ref: https://www.iquilezles.org/www/articles/smin/smin.htm)
 float smoothMinPoly(float a, float b, float smoothness) {
   float h = max( smoothness-abs(a-b), 0.0 )/smoothness;
@@ -88,7 +98,7 @@ float booleanUnionSmooth(float distanceA, float distanceB, float smoothness) {
 
 
 Sphere signedDistanceSphere(vec3 point, vec3 position, float radius) {
-  float distance = length(point - position) - radius;
+  float distance = length(opRep(point - position, 10.)) - radius;
   return Sphere(position, radius, distance);
 }
 
@@ -131,9 +141,12 @@ Cylinder signedDistanceCylinder(vec3 point, vec3 a, vec3 b, float radius) {
 
 Torus signedDistanceTorus(vec3 point, vec3 position, float radius, float innerRadius, float offset) {
   vec3 relativePosition = point - position;
+  // relativePosition.z = mod(relativePosition.z, 3.);
+  // relativePosition.xy += vec2(sin(iTime), cos(iTime) * 2.);
+  // float c = 10.;
+  relativePosition = opRep(relativePosition, vec3(10., 10., 0.));
   relativePosition.xy *= rotate(sin(iTime) + offset);
   relativePosition.zy *= rotate(iTime + offset);
-  // relativePosition.xy += vec2(sin(iTime), cos(iTime) * 2.);
   float x = length(relativePosition.xz) - radius;
   float distance = length(vec2(x, relativePosition.y)) - innerRadius;
   
@@ -151,7 +164,7 @@ Box signedDistanceBox(vec3 point, vec3 position, vec3 size) {
   boxPosition.yz *= rotate(iTime*.4);
   boxPosition.yx *= rotate(iTime*.4);
   float stepDivision = 4.; // to cater for rotation causing artifacts
-  float distance = length(max(abs(boxPosition) - size, 0.)) / stepDivision;
+  float distance = length(max(abs(mod(boxPosition, 10.)) - size, 0.)) / stepDivision;
   return Box(
     position,
     size,
@@ -173,15 +186,17 @@ float getDistanceToScene(vec3 point) {
     Box box = signedDistanceBox(point, vec3(-1, .15, 0), vec3(.5, .3, 1.9));
 
     // boolean modifications
-    float sDistance = booleanUnionSmooth(box.distance, sphere.distance, .5);
-    sDistance = booleanUnionSmooth(sDistance, capsule.distance, 0.3);
-    sDistance = booleanUnionSmooth(sDistance, torus.distance, 0.3);
-    sDistance = booleanUnionSmooth(sDistance, torus2.distance, 0.3);
-    sDistance = booleanUnionSmooth(sDistance, cylinder.distance, 0.3);
+    // float distance = min(torus.distance, sphere.distance);
+
+    float sDistance = booleanUnionSmooth(torus.distance, sphere.distance, .5);
+    // sDistance = booleanUnionSmooth(sDistance, capsule.distance, 0.3);
+    // sDistance = booleanUnionSmooth(sDistance, torus.distance, 0.3);
+    // sDistance = booleanUnionSmooth(sDistance, torus2.distance, 0.3);
+    // sDistance = booleanUnionSmooth(sDistance, cylinder.distance, 0.3);
 
     // scene distance
     float distanceToPlane = point.y;
-    float distance = booleanUnionSmooth(sDistance, distanceToPlane, .3);
+    float distance = booleanUnionSmooth(sDistance, distanceToPlane, .5);
     // float distance = min(capsule.distance, distanceToPlane);
     // distance = min(distance, sphere2.distance);
     // distance = min(distance, sphere.distance);
